@@ -5,7 +5,7 @@
 <<<<<<< HEAD
 **/saved_model
 .venv
-.venv
+.idea
 =======
 >>>>>>> 3d414e97fe5faf2dcb7e44cc9a38f724609028ba
 __pycache__/
