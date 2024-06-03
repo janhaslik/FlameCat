@@ -35,8 +35,6 @@ class ModelTrainer:
         self.load_data()
         trained_model = self.train(epochs=1)
         true_labels, pred_labels = self.evaluate(trained_model)
-        for i in range(0, len(true_labels)):
-            print(true_labels[i]+ " "+pred_labels[i])
         torch.save(trained_model.state_dict(), "model/saved_model/flamecat-model.pt")
 
     def load_data(self):
@@ -102,12 +100,12 @@ class ModelTrainer:
 
                     acc = (output.argmax(dim=1) == val_label).sum().item()
                     total_acc_val += acc
-
+                """
                 print(
                     f"Epochs: {epoch_num + 1} | Train Loss: {total_loss_train / len(self.df_train): .3f} \
                     | Train Accuracy: {total_acc_train / len(self.df_train): .3f} \
-                    | Val Loss: {total_loss_val / len(self.df_val): .3f} \
-                    | Val Accuracy: {total_acc_val / len(self.df_val): .3f}")
+                    | Val Loss: {total_loss_val+1 / len(self.df_val+1): .3f} \
+                    | Val Accuracy: {total_acc_val+1 / len(self.df_val): .3f}")"""
 
         return model
 

@@ -1,6 +1,7 @@
 from model.classifier import SimpleGPT2SequenceClassifier
 from transformers import GPT2Tokenizer
 import torch
+import torch.nn.functional as F
 
 labels_map = {
     0: "politics",
@@ -27,5 +28,7 @@ def predict(text):
 
     output = model_new(input_id, mask)
 
+    probabilities = F.softmax(output, dim=1).squeeze().tolist()
+
     pred_label = labels_map[output.argmax(dim=1).item()]
-    return pred_label
+    return pred_label, {label: round(prob*100,2) for label, prob in zip(labels_map.values(),probabilities)}
