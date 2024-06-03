@@ -4,6 +4,7 @@
 **/.DS_Store
 <<<<<<< HEAD
 **/saved_model
+.venv
 =======
 >>>>>>> 3d414e97fe5faf2dcb7e44cc9a38f724609028ba
 __pycache__/
