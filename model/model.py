@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from torch import nn
 from torch.optim import Adam
-from transformers import GPT2Tokenizer
+from transformers import GPT2Tokenizer, get_linear_schedule_with_warmup
 from tqdm import tqdm
 import pandas as pd
 from model.dataset import Dataset
@@ -22,6 +22,7 @@ labels = {
     3: 3,
     4: 4
 }
+
 class ModelTrainer:
     def __init__(self, tokenizer_name='gpt2'):
         self.data_file = data_file
@@ -33,7 +34,7 @@ class ModelTrainer:
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
         self.load_data()
-        trained_model = self.train(epochs=1)
+        trained_model = self.train(epochs=3, learning_rate=2e-5)
         true_labels, pred_labels = self.evaluate(trained_model)
         torch.save(trained_model.state_dict(), "model/saved_model/flamecat-model.pt")
 
@@ -41,21 +42,23 @@ class ModelTrainer:
         df = pd.read_csv(self.data_file)
         np.random.seed(112)
         self.df_train, self.df_val, self.df_test = np.split(df.sample(frac=1, random_state=35),
-                                                            [int(0.8*len(df)), int(0.2*len(df))])
+                                                            [int(0.8*len(df)), int(0.9*len(df))])
 
-    def train(self, epochs=1, learning_rate=1e-5):
+    def train(self, epochs=100, learning_rate=2e-5):
         model = SimpleGPT2SequenceClassifier(**self.model_params)
         train_data = Dataset(self.df_train, self.labels, self.tokenizer)
         val_data = Dataset(self.df_val, self.labels, self.tokenizer)
 
-        train_dataloader = torch.utils.data.DataLoader(train_data, batch_size=2, shuffle=True)
-        val_dataloader = torch.utils.data.DataLoader(val_data, batch_size=2)
+        train_dataloader = torch.utils.data.DataLoader(train_data, batch_size=8, shuffle=True)
+        val_dataloader = torch.utils.data.DataLoader(val_data, batch_size=8)
 
         use_cuda = torch.cuda.is_available()
         device = torch.device("cuda" if use_cuda else "cpu")
 
         criterion = nn.CrossEntropyLoss()
         optimizer = Adam(model.parameters(), lr=learning_rate)
+        total_steps = len(train_dataloader) * epochs
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=0, num_training_steps=total_steps)
 
         if use_cuda:
             model = model.cuda()
@@ -65,6 +68,7 @@ class ModelTrainer:
             total_acc_train = 0
             total_loss_train = 0
 
+            model.train()
             for train_input, train_label in tqdm(train_dataloader):
                 train_label = train_label.to(device)
                 mask = train_input['attention_mask'].to(device)
@@ -82,12 +86,13 @@ class ModelTrainer:
 
                 batch_loss.backward()
                 optimizer.step()
+                scheduler.step()
 
             total_acc_val = 0
             total_loss_val = 0
 
+            model.eval()
             with torch.no_grad():
-
                 for val_input, val_label in val_dataloader:
                     val_label = val_label.to(device)
                     mask = val_input['attention_mask'].to(device)
@@ -100,19 +105,11 @@ class ModelTrainer:
 
                     acc = (output.argmax(dim=1) == val_label).sum().item()
                     total_acc_val += acc
-                """
-                print(
-                    f"Epochs: {epoch_num + 1} | Train Loss: {total_loss_train / len(self.df_train): .3f} \
-                    | Train Accuracy: {total_acc_train / len(self.df_train): .3f} \
-                    | Val Loss: {total_loss_val+1 / len(self.df_val+1): .3f} \
-                    | Val Accuracy: {total_acc_val+1 / len(self.df_val): .3f}")"""
-
         return model
 
     def evaluate(self, model):
         test_data = Dataset(self.df_test, self.labels, self.tokenizer)
-
-        test_dataloader = torch.utils.data.DataLoader(test_data, batch_size=2)
+        test_dataloader = torch.utils.data.DataLoader(test_data, batch_size=8)
 
         use_cuda = torch.cuda.is_available()
         device = torch.device("cuda" if use_cuda else "cpu")
@@ -125,8 +122,8 @@ class ModelTrainer:
         true_labels = []
 
         total_acc_test = 0
+        model.eval()
         with torch.no_grad():
-
             for test_input, test_label in test_dataloader:
                 test_label = test_label.to(device)
                 mask = test_input['attention_mask'].to(device)
@@ -144,12 +141,3 @@ class ModelTrainer:
 
         print(f'Test Accuracy: {total_acc_test / len(self.df_test): .3f}')
         return true_labels, predictions_labels
-
-
-"""
-trainer = ModelTrainer(data_file, model_params, labels)
-trainer.load_data()
-trained_model = trainer.train(epochs=1)
-true_labels, pred_labels = trainer.evaluate(trained_model)
-torch.save(trained_model.state_dict(), "model/saved_model/flamecat-model.pt")
-"""
